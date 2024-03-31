@@ -27,7 +27,10 @@ class Client:
         translate=False,
         model="small",
         srt_file_path="output.srt",
-        use_vad=True
+        use_vad=True,
+        device_index=None,
+        action_interval=10,
+        action_function=lambda segments: None
     ):
         """
         Initializes a Client instance for audio recording and streaming to a server.
@@ -55,6 +58,10 @@ class Client:
         self.use_vad = use_vad
         self.last_segment = None
         self.last_received_segment = None
+        self.device_index = device_index
+        self.action_interval = action_interval
+        self.last_action_time = 0
+        self.action_function = action_function
 
         if translate:
             self.task = "translate"
@@ -101,6 +108,7 @@ class Client:
 
     def process_segments(self, segments):
         """Processes transcript segments."""
+        current_time = time.time()
         text = []
         for i, seg in enumerate(segments):
             if not text or text[-1] != seg["text"]:
@@ -117,9 +125,12 @@ class Client:
             self.last_received_segment = segments[-1]["text"]
 
         # Truncate to last 3 entries for brevity.
-        text = text[-3:]
-        utils.clear_screen()
-        utils.print_transcript(text)
+        text = text[-20:]
+        if current_time - self.last_action_time >= self.action_interval:
+            self.action_function(self.transcript)
+            self.last_action_time = current_time
+        #utils.clear_screen()
+        #utils.print_transcript(text)
 
     def on_message(self, ws, message):
         """
@@ -290,6 +301,7 @@ class TranscriptionTeeClient:
                 rate=self.rate,
                 input=True,
                 frames_per_buffer=self.chunk,
+                input_device_index=self.clients[0].device_index
             )
         except OSError as error:
             print(f"[WARN]: Unable to access microphone. {error}")
@@ -587,6 +599,6 @@ class TranscriptionClient(TranscriptionTeeClient):
         transcription_client()
         ```
     """
-    def __init__(self, host, port, lang=None, translate=False, model="small", use_vad=True):
-        self.client = Client(host, port, lang, translate, model, srt_file_path="output.srt", use_vad=use_vad)
+    def __init__(self, host, port, lang=None, translate=False, model="small", use_vad=True, device_index=None, action_interval=10, action_function=lambda segments: None):
+        self.client = Client(host, port, lang, translate, model, srt_file_path="output.srt", use_vad=use_vad, device_index=device_index, action_interval=action_interval, action_function=action_function)
         TranscriptionTeeClient.__init__(self, [self.client])
