@@ -10,6 +10,10 @@ import uuid
 import time
 import ffmpeg
 import whisper_live.utils as utils
+import paho.mqtt.client as mqtt
+import paho.mqtt.publish as publish
+import random
+
 
 
 class Client:
@@ -18,6 +22,7 @@ class Client:
     """
     INSTANCES = {}
     END_OF_AUDIO = "END_OF_AUDIO"
+    mqtt_client = None
 
     def __init__(
         self,
@@ -62,12 +67,15 @@ class Client:
         self.action_interval = action_interval
         self.last_action_time = 0
         self.action_function = action_function
+        self.mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
         if translate:
             self.task = "translate"
 
         self.timestamp_offset = 0.0
         self.audio_bytes = None
+
+
 
         if host is not None and port is not None:
             socket_url = f"ws://{host}:{port}"
@@ -93,6 +101,29 @@ class Client:
 
         self.transcript = []
         print("[INFO]: * recording")
+
+        #self.mqtt_client.on_connect = self.on_mqtt_connect
+        #try:
+        #    publish.single("paho/test/topic", "payload", hostname="lilnasx.home.objectivetruth.ca", port=8006)
+        #except Exception as e:
+        #    print(f"Error connecting to MQTT broker: {e}")
+
+        #unacked_publish = set()
+        #try:
+        #except Exception as e:
+        #    print(f"Error connecting to MQTT broker: {e}")
+        #self.mqtt_client.user_data_set(unacked_publish)
+        self.mqtt_client.connect("lilnasx.home.objectivetruth.ca", 8006)  # replace with your MQTT broker's URL and port
+        #self.mqtt_client.connect("mqtt.eclipseprojects.io")
+        self.mqtt_client.loop_start()
+
+        # Our application produce some messages
+        #msg_info = self.mqtt_client.publish("paho/test/topic", "my message", qos=1)
+        #unacked_publish.add(msg_info.mid)
+
+
+    def on_mqtt_connect(client, userdata, flags, rc):
+        print(f"Connected to MQTT with result code {rc}")
 
     def handle_status_messages(self, message_data):
         """Handles server status messages."""
@@ -124,10 +155,17 @@ class Client:
             self.last_response_received = time.time()
             self.last_received_segment = segments[-1]["text"]
 
+
+
         # Truncate to last 3 entries for brevity.
         text = text[-20:]
         if current_time - self.last_action_time >= self.action_interval:
             self.action_function(self.transcript)
+            try:
+                text_contents = ', '.join(segment['text'].strip() for segment in segments)
+                self.mqtt_client.publish("paho/anothertest", text_contents)
+            except Exception as e:
+                print(f"Error publishing MQTT message: {e}")
             self.last_action_time = current_time
         #utils.clear_screen()
         #utils.print_transcript(text)
