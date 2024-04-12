@@ -1,0 +1,10 @@
+FROM ghcr.io/collabora/whisperlive-gpu:latest
+
+# Replace all instances of "float16" with "float32" in server.py file
+# This allows this code to run on GPUs that do not support float16 (e.g. GTX 10 series)
+
+# Increase max_connection_time from 600 to 36000 (10 hours)
+# This is to prevent the server from closing the connection after 10 hours of inactivity
+
+RUN sed -i 's/float16/float32/g' /app/whisper_live/server.py && \
+    sed -i 's/max_connection_time=600/max_connection_time=36000/g' /app/whisper_live/server.py
